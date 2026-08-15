@@ -1,0 +1,27 @@
+# Model files (too large for GitHub)
+models/*.gguf
+models/*.bin
+models/*.safetensors
+
+# Dataset (already on HuggingFace)
+data/ghanaagricvoa/
+
+# Demo video (host on YouTube/Vimeo)
+outputs/demo_video.mp4
+
+# Python environment
+venv/
+__pycache__/
+*.pyc
+.env
+
+# llama.cpp build artifacts
+llama.cpp/build/
+llama.cpp/*.o
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs (optional — keep results JSONs, skip raw logs)
+*.log
