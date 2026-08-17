@@ -1,0 +1,21 @@
+{
+  "timestamp_utc": "2026-08-16T20:39:02.393681+00:00",
+  "duration_requested_s": 15,
+  "duration_actual_s": 15.0,
+  "interval_s": 3.0,
+  "sensors_available": false,
+  "sensors_unavailable_reason": "sensors detected but no CPU package/core temperature feature found (common in WSL2 \u2014 see script docstring)",
+  "sample_count": 5,
+  "valid_temp_sample_count": 0,
+  "avg_temp_c": null,
+  "max_temp_c": null,
+  "min_temp_c": null,
+  "adtc_disqualification_threshold_c": 85.0,
+  "adtc_target_ceiling_c": 80.0,
+  "exceeded_disqualification_threshold": null,
+  "exceeded_target_ceiling": null,
+  "inference_error_count": 0,
+  "recommendations": [
+    "Re-run this script on bare-metal Ubuntu 22.04 (not WSL2) to get real thermal data for ADTC submission."
+  ]
+}

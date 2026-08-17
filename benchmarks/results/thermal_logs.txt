@@ -1,0 +1,9 @@
+# RK AgriDig Thermal Log — started 2026-08-16T20:38:44.483875+00:00
+# sensors_available=False reason="sensors detected but no CPU package/core temperature feature found (common in WSL2 — see script docstring)"
+# adtc_disqualification_threshold_c=85.0
+# timestamp_utc,elapsed_s,temp_c,source
+2026-08-16T20:38:44.483892+00:00,0.0,N/A,unavailable
+2026-08-16T20:38:47.484043+00:00,3.0,N/A,unavailable
+2026-08-16T20:38:50.484283+00:00,6.0,N/A,unavailable
+2026-08-16T20:38:53.484632+00:00,9.0,N/A,unavailable
+2026-08-16T20:38:56.484892+00:00,12.0,N/A,unavailable
