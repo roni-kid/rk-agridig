@@ -159,21 +159,24 @@ log_info "Configuring CMake with CPU optimizations..."
 # - OpenBLAS for matrix operations (significant speedup)
 # - Release mode for performance
 # - Optimizations enabled
+# NOTE: current llama.cpp CMake options use the GGML_* prefix, not LLAMA_*.
+# The old LLAMA_BLAS / LLAMA_NATIVE / LLAMA_F16C / LLAMA_FMA names were
+# renamed upstream; passing them here is silently ignored by CMake (unknown
+# -D flags don't error by default), which means OpenBLAS was never actually
+# being enabled despite this step reporting success.
 cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-    -DLLAMA_BLAS=ON \
-    -DLLAMA_BLAS_VENDOR=OpenBLAS \
-    -DLLAMA_NATIVE=ON \
-    -DLLAMA_F16C=ON \
-    -DLLAMA_FMA=ON \
+    -DGGML_BLAS=ON \
+    -DGGML_BLAS_VENDOR=OpenBLAS \
+    -DGGML_NATIVE=ON \
     .. || {
     log_error "CMake configuration failed"
     log_info "Trying without OpenBLAS (CPU will be slower)..."
     cmake \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-        -DLLAMA_NATIVE=ON \
+        -DGGML_NATIVE=ON \
         ..
 }
 
@@ -259,11 +262,12 @@ fi
 log_info ""
 log_info "Verifying installation..."
 
-# Check llama-cpp-bin exists
-if [[ -f "$BUILD_DIR/bin/main" ]] || [[ -f "$BUILD_DIR/main" ]]; then
-    log_success "llama-cpp-bin found"
+# Check llama-cli exists (llama.cpp renamed the CLI binary from 'main' to
+# 'llama-cli'; the old name no longer exists in current builds)
+if [[ -f "$BUILD_DIR/bin/llama-cli" ]] || [[ -f "$BUILD_DIR/llama-cli" ]]; then
+    log_success "llama-cli found"
 else
-    log_warn "Could not locate llama-cpp-bin binary"
+    log_warn "Could not locate llama-cli binary"
 fi
 
 # Check llama-bench

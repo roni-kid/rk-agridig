@@ -24,6 +24,9 @@
 ################################################################################
 
 set -e
+# Note: deliberately NOT using pipefail here. The `{ llama-bench ... || log_warn } | tee`
+# block below is designed to let one batch-size failure log a warning and continue
+# to the next batch size rather than aborting the whole profiling run.
 
 # ============================================================================
 # Configuration
@@ -57,7 +60,7 @@ BENCHMARK_RUNS=5                # Benchmark iterations
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m''
+BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() {
@@ -207,12 +210,11 @@ for BATCH_SIZE in "${BATCH_SIZES[@]}"; do
     # We'll capture and parse them
     {
         timeout 600 "$LLAMABENCH_BIN" \
-            --model "$MODEL_PATH" \
-            --n-threads $NUM_THREADS \
-            --n-predict $NUM_PREDICT \
-            --n-batch $BATCH_SIZE \
-            --n-warmup $WARMUP_RUNS \
-            --n-runs $BENCHMARK_RUNS \
+            -m "$MODEL_PATH" \
+            -t "$NUM_THREADS" \
+            -n "$NUM_PREDICT" \
+            -b "$BATCH_SIZE" \
+            -r "$BENCHMARK_RUNS" \
             2>&1 || log_warn "llama-bench timeout or error for batch size $BATCH_SIZE"
     } | tee "$BATCH_RESULT_FILE"
     
@@ -257,21 +259,22 @@ if [[ -f "$LLAMA_MAIN" ]]; then
     
     INFERENCE_PID=$!
     
-    # Monitor RAM while inference runs
-    while kill -0 $INFERENCE_PID 2>/dev/null; do
-        if command -v ps &> /dev/null; then
-            CURRENT_RAM=$(ps aux | grep $INFERENCE_PID | grep -v grep | awk '{print int($6)}')
-            if [[ ! -z "$CURRENT_RAM" ]]; then
-                CURRENT_RAM_GB=$(echo "scale=2; $CURRENT_RAM / 1024 / 1024" | bc)
-                if (( $(echo "$CURRENT_RAM_GB > $PEAK_RAM" | bc -l) )); then
-                    PEAK_RAM=$CURRENT_RAM_GB
-                fi
+    # Monitor RAM while inference runs. Reads VmRSS directly from /proc for
+    # the exact PID rather than `ps aux | grep $PID`, which can false-match
+    # the PID number appearing elsewhere on an unrelated line (e.g. inside
+    # another process's args or a timestamp).
+    while kill -0 "$INFERENCE_PID" 2>/dev/null; do
+        if [[ -r "/proc/$INFERENCE_PID/status" ]]; then
+            CURRENT_RAM_KB=$(awk '/VmRSS/ {print $2}' "/proc/$INFERENCE_PID/status" 2>/dev/null)
+            if [[ -n "$CURRENT_RAM_KB" ]]; then
+                CURRENT_RAM_GB=$(awk -v kb="$CURRENT_RAM_KB" 'BEGIN { printf "%.2f", kb / 1048576 }')
+                PEAK_RAM=$(awk -v cur="$CURRENT_RAM_GB" -v peak="$PEAK_RAM" 'BEGIN { print (cur > peak) ? cur : peak }')
             fi
         fi
         sleep 0.1
     done
-    
-    wait $INFERENCE_PID
+
+    wait "$INFERENCE_PID"
     
     log_success "Peak RAM usage: ${PEAK_RAM} GB"
 else
@@ -286,8 +289,8 @@ log_info ""
 log_info "Calculating ADTC scores..."
 
 # Seff = 100 × ((7 GB − Peak_RAM) / 7 GB)
-if (( $(echo "$PEAK_RAM > 0" | bc -l) )); then
-    SEFF=$(echo "scale=2; 100 * ((7 - $PEAK_RAM) / 7)" | bc)
+if awk -v ram="$PEAK_RAM" 'BEGIN { exit !(ram > 0) }'; then
+    SEFF=$(awk -v ram="$PEAK_RAM" 'BEGIN { printf "%.2f", 100 * ((7 - ram) / 7) }')
     log_info "Seff (Efficiency): $SEFF"
 else
     SEFF="N/A"
@@ -311,6 +314,15 @@ cat >> "$RESULTS_JSON" << EOF
 EOF
 
 log_success "Results saved to: $RESULTS_JSON"
+
+# Human-readable summary (referenced in the final printout below)
+{
+    echo "RK AgriDig — Benchmark Results"
+    echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "Mode: $BENCHMARK_MODE | Threads: $NUM_THREADS | Batch sizes: ${BATCH_SIZES[@]}"
+    echo "Peak RAM: ${PEAK_RAM} GB"
+    echo "Seff Score: $SEFF"
+} > "$RESULTS_TEXT"
 
 # Print summary
 log_info ""

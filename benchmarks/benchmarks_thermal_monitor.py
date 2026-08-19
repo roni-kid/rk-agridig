@@ -123,13 +123,19 @@ def get_cpu_temperature_psutil() -> Optional[Dict[str, float]]:
         # Prefer coretemp (Intel) or k10temp (AMD)
         preferred_sensors = ['coretemp', 'k10temp', 'zenpower', 'it8792', 'nct6798']
         
+        # Each entry is a psutil shwtemp namedtuple: (label, current, high,
+        # critical) — 4 fields, not 3. Unpacking as (_, temp, _) raises
+        # ValueError on any real system that actually returns sensor data;
+        # this went uncaught because dev/test ran under WSL2, where
+        # sensors_temperatures() returns an empty dict and this code path
+        # never executes.
         for sensor in preferred_sensors:
             if sensor in temps:
-                return {f"{sensor}_{i}": temp for i, (_, temp, _) in enumerate(temps[sensor])}
+                return {f"{sensor}_{i}": entry.current for i, entry in enumerate(temps[sensor])}
         
         # Fallback: use first available sensor
         first_sensor = list(temps.keys())[0]
-        return {f"{first_sensor}_{i}": temp for i, (_, temp, _) in enumerate(temps[first_sensor])}
+        return {f"{first_sensor}_{i}": entry.current for i, entry in enumerate(temps[first_sensor])}
     
     except Exception as e:
         logger.debug(f"psutil temperature reading failed: {e}")

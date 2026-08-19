@@ -191,7 +191,14 @@ def run_inference_loop(stop_event: threading.Event, state: MonitorState, dry_run
         stop_event.set()
         return
 
-    threads = str(psutil.cpu_count(logical=True) or 4)
+    # Use physical core count, not logical/hyperthreaded count. Task 1.3's
+    # profiling (see REPORT.md) found 16 logical threads nearly halves
+    # throughput vs 8 physical cores on this hardware due to hyperthread
+    # contention — running the thermal test at the wrong thread count also
+    # confounds the heat measurement with that same contention overhead,
+    # rather than reflecting realistic sustained-load heat.
+    physical_cores = psutil.cpu_count(logical=False)
+    threads = str(physical_cores or psutil.cpu_count(logical=True) or 4)
 
     while not stop_event.is_set():
         try:

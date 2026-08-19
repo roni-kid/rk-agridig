@@ -30,14 +30,14 @@ Smallholder farmers across sub-Saharan Africa lack reliable access to crop disea
 
 ## 📊 Dataset
 
-Built on **GhanaAgricVOA** — a visual question-answering dataset from Ghana with:
+Built on **GhanaAgricVQA** — a visual question-answering dataset from Ghana with:
 - **2,361 Q&A pairs** (train: 2,010 | test: 351)
 - **787 images** from real Ghanaian farms (RAIL dataset)
 - **3 crops:** Maize, Pepper, Tomato
 - **26 disease classes** with expert annotations
 - **English + Twi** translations for accessibility
 
-[View dataset on HuggingFace](https://huggingface.co/datasets/GhanaAgricVOA-Dataset)
+[View dataset on HuggingFace](https://huggingface.co/datasets/GhanaAgricVQA-Dataset)
 
 ## 🛠️ Technical Stack
 
@@ -131,7 +131,7 @@ Prevention for next season:
   - `prompt_engineer.py` — System prompts & Q&A templates
   - `evaluator.py` — Accuracy evaluation (BLEU, semantic similarity)
   - `benchmarker.py` — Performance profiling (TPS, RAM)
-- **`data/`** — GhanaAgricVOA dataset (train/test splits)
+- **`data/`** — GhanaAgricVQA dataset (train/test splits)
 - **`models/`** — Phi-3-mini GGUF (quantized, ~2.3GB)
 - **`ui/`** — Gradio web interface
 - **`benchmarks/`** — Performance results & thermal monitoring
@@ -145,7 +145,7 @@ Prevention for next season:
 python src/evaluator.py --dataset data/eval_samples.json --model models/phi3_mini_4k_instruct.gguf
 ```
 
-Outputs accuracy metrics using BLEU and semantic similarity against reference answers from GhanaAgricVOA.
+Outputs accuracy metrics using BLEU and semantic similarity against reference answers from GhanaAgricVQA.
 
 ### Performance Profiling
 
@@ -211,7 +211,7 @@ This is a solo project for ADTC 2026, but feedback and improvements are welcome 
 
 ## 📜 License
 
-This project is released under **CC-BY 4.0** to match the GhanaAgricVOA dataset license.
+This project is released under **CC-BY 4.0** to match the GhanaAgricVQA dataset license.
 
 ### Citation
 
@@ -228,11 +228,11 @@ This project is released under **CC-BY 4.0** to match the GhanaAgricVOA dataset 
 Dataset citation:
 ```bibtex
 @misc{ghanaagrivqa2026,
-  title={GhanaAgricVOA: Crop Disease Visual Question Answering Dataset},
+  title={GhanaAgricVQA: Crop Disease Visual Question Answering Dataset},
   author={Toufiq Musah, Nyameye Akyaa Idun-Sam, Abotsi Benjamin Etornam},
   year={2026},
   publisher={Hugging Face},
-  url={https://huggingface.co/datasets/GhanaAgricVOA-Dataset}
+  url={https://huggingface.co/datasets/GhanaAgricVQA-Dataset}
 }
 ```
 

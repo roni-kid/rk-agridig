@@ -52,35 +52,28 @@ REPO_ID = "toufiqmusah/GhanaAgricVQA-Dataset"
 DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "data" / "eval_samples.json"
 
 
-def extract_answer_text(answer_field) -> str:
+def extract_answer_text(row: dict) -> str:
     """
-    The 'answer' column is a nested dict {'text': ..., 'detections': [...]}
-    on the live dataset, not a plain string as originally assumed in early
-    project docs. Handle both shapes defensively in case this changes.
+    Real confirmed schema (verified via ds.features on live dataset):
+    'answer_text' is a plain string column -- NOT a nested dict as an
+    earlier (incorrect) assumption in this script had it. That earlier
+    assumption came from misreading a dataset-viewer preview and was never
+    verified against the actual Features schema -- this version is.
     """
-    if isinstance(answer_field, dict):
-        return answer_field.get("text", "")
-    if isinstance(answer_field, str):
-        return answer_field
-    return str(answer_field)
+    return row.get("answer_text") or ""
 
 
-def extract_disease_label(answer_field) -> str | None:
+def extract_disease_label(row: dict) -> str | None:
     """
-    Derive a single representative disease label from the detections list,
-    for convenience when building prompts/scoring. Returns None for
-    healthy-plant samples (empty detections) rather than a fake label.
+    Real confirmed schema: 'disease_labels' is a List(Value('string'))
+    column, parallel to 'bboxes' and 'severities' (NOT nested inside an
+    'answer' object). Returns the most common label across the list, or
+    None for healthy-plant samples with an empty list.
     """
-    if not isinstance(answer_field, dict):
-        return None
-    detections = answer_field.get("detections", [])
-    if not detections:
-        return None
-    labels = [d.get("disease_label") for d in detections if d.get("disease_label")]
+    labels = row.get("disease_labels") or []
+    labels = [l for l in labels if l]
     if not labels:
         return None
-    # Most common label across detections (usually all the same disease,
-    # multiple bounding boxes on the same leaf/plant)
     return Counter(labels).most_common(1)[0][0]
 
 
@@ -117,6 +110,13 @@ def main() -> int:
     print("Loading dataset (this fetches from HuggingFace Hub)...")
     try:
         ds = load_dataset(REPO_ID, split=args.split)
+        # Drop the image column before iterating -- we only need text fields
+        # for eval_samples.json, and decoding images requires Pillow to be
+        # installed even though we never use the decoded image here. This
+        # keeps the common case (just extracting Q&A text) dependency-light;
+        # Pillow is only actually needed for --save-full-dataset below.
+        if "image" in ds.column_names:
+            ds = ds.remove_columns(["image"])
     except Exception as exc:  # noqa: BLE001
         print(f"\nERROR: Failed to load dataset: {exc}", file=sys.stderr)
         print(
@@ -173,8 +173,8 @@ def main() -> int:
 
     for i in selected_indices:
         row = ds[i]
-        answer_text = extract_answer_text(row.get("answer"))
-        disease = extract_disease_label(row.get("answer"))
+        answer_text = extract_answer_text(row)
+        disease = extract_disease_label(row)
         validated = bool(row.get("validated", False))
         confidence = row.get("generation_confidence")
 
