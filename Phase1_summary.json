@@ -1,0 +1,99 @@
+{
+  "phase": "Phase 1: Model Selection & Profiling",
+  "status": "complete",
+  "date_completed": "2026-08-17",
+  "environment": {
+    "os": "Ubuntu (WSL2 on Windows 11)",
+    "wsl_kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "cpu": "AMD Ryzen AI 7 350 (8 physical cores / 16 logical threads)",
+    "wsl_ram_visible_gb": 7.3,
+    "note": "Thermal readings sourced from Windows host via WMI (see task_1_4), since WSL2 kernel has no coretemp/hardware sensor access."
+  },
+  "tasks": {
+    "task_1_1_download_model": {
+      "status": "complete",
+      "model": "microsoft/Phi-3-mini-4k-instruct-gguf",
+      "file": "Phi-3-mini-4k-instruct-q4.gguf",
+      "quantization": "Q4_K_M",
+      "saved_as": "models/phi3_mini_4k_instruct.gguf",
+      "size_gb": 2.23,
+      "checksum_verified": true,
+      "checksum_method": "SHA256 (via HfApi model_info, not MD5 as originally specified in build plan \u2014 HF does not publish MD5 for this file)",
+      "checksum_sha256": "8a83c7fb9049a9b2e92266fa7ad04933bb53aa1e85136b7b30f1b8000ff2edef",
+      "download_time": "10m 46s",
+      "avg_download_rate_mbps": 3.53
+    },
+    "task_1_2_llama_cpp_setup": {
+      "status": "complete",
+      "repo": "https://github.com/ggml-org/llama.cpp",
+      "build_commit": "4df29be4f",
+      "build_number": 10454,
+      "backend": "CPU-only",
+      "blas_vendor": "OpenBLAS (INTENDED per setup.sh, but NOT CONFIRMED ACTIVE -- see note)",
+      "blas_active_verification_note": "The real llama_bench_raw.json from this run reports \"backends\": \"CPU\" with no BLAS designation. Per llama.cpp's own behavior (confirmed via GitHub issue ggml-org/llama.cpp#25547), when BLAS is genuinely compiled in and active, the backend field reports \"BLAS,...\" not bare \"CPU\". Combined with real apt permission errors observed during the setup.sh run (dpkg lock failures), this strongly suggests OpenBLAS was NOT actually active during this benchmark, despite the build script reporting configuration success. The 17.69 TPS / 3.65GB results should therefore be understood as achieved on llama.cpp's native CPU backend WITHOUT BLAS acceleration -- which is a more conservative (and still passing) result, but any prior claim that OpenBLAS was providing a speedup is unverified and likely incorrect.",
+      "binaries_confirmed": ["llama-cli", "llama-bench", "llama-server"],
+      "sanity_inference_test": "passed"
+    },
+    "task_1_3_performance_profiling": {
+      "status": "complete",
+      "tool": "llama-bench",
+      "thread_count_used": 8,
+      "thread_count_note": "Physical core count (8), not logical/hyperthreaded count (16). Empirically confirmed 16 threads causes contention on this 8C/16T CPU: 16 threads = 10.93 TPS vs 8 threads = 20.09 TPS peak in isolated llama-bench sweep; 17.69 TPS in full profiler run with concurrent RAM sampling overhead.",
+      "thread_sweep_results_tg128": {
+        "4_threads_tps": 17.41,
+        "6_threads_tps": 19.29,
+        "8_threads_tps": 20.09,
+        "12_threads_tps": 17.25,
+        "16_threads_tps": 10.93
+      },
+      "final_results": {
+        "throughput_tokens_per_second": 17.694,
+        "peak_ram_usage_gb": 3.652,
+        "model_size_gb": 2.229,
+        "batch_sizes_tested": [1, 8, 32],
+        "prompt_tokens_per_test": 512,
+        "generation_tokens_per_test": 128,
+        "repetitions": 3
+      },
+      "adtc_targets": {
+        "min_tps": 15,
+        "max_ram_gb": 7,
+        "meets_tps_target": true,
+        "meets_ram_target": true
+      }
+    },
+    "task_1_4_thermal_monitoring": {
+      "status": "complete",
+      "method": "Windows-host WMI polling (MSAcpi_ThermalZoneTemperature) via companion script benchmarks/thermal_monitor_windows.ps1, run alongside WSL2 inference load",
+      "why_not_native_wsl_lm_sensors": "Confirmed via sensors-detect: 'Module cpuid not found in directory /lib/modules/6.18.33.2-microsoft-standard-WSL2'. WSL2's Linux kernel has no coretemp/hardware sensor driver access \u2014 this is a platform limitation, not fixable from inside WSL2. benchmarks/thermal_monitor.py (the Linux-native script) correctly detects and reports this condition rather than fabricating data; it remains the correct tool for a bare-metal Ubuntu run.",
+      "test_conditions": "20 consecutive back-to-back inference calls (~128 tokens generated each, no gaps between calls) via llama-cli, -t 8, over ~220 seconds of continuous load. CPU was NOT at a cold baseline at test start (91C initial reading, likely residual heat from prior test runs).",
+      "results": {
+        "avg_temp_c": 87.08,
+        "max_temp_c": 98,
+        "min_temp_c": 66,
+        "sustained_above_80c_duration_s": "~200 (t=0 to t=~206)",
+        "sustained_above_85c": true,
+        "exceeded_adtc_disqualification_threshold_85c": true,
+        "exceeded_target_ceiling_80c": true
+      },
+      "interpretation": "Sustained continuous CPU-only inference (back-to-back, no pauses) drives this CPU (AMD Ryzen AI 7 350, 8C/16T mobile chip) to a sustained 87C AVERAGE (not just a brief peak) over the full ~217-second load window, peaking at 98C, and exceeding both the 80C target ceiling and the 85C ADTC disqualification threshold for the majority of the test duration -- not a brief spike but the norm for most of the run. This is a genuine finding, not a measurement error -- confirmed by a clear load-correlated climb and cooldown curve. CORRECTION: an earlier version of this summary incorrectly reported avg_temp_c as 63.38C (a transcription error); the correct figure, verified independently against the raw thermal_logs_windows.txt data and matching thermal_summary_windows.json exactly, is 87.08C. Caveats: (1) test used unrealistic back-to-back load with zero inter-query gaps, unlike expected real farmer usage; (2) CPU was already warm at test start (91C) rather than at a cold baseline; (3) result reflects this specific laptop's cooling solution, which may differ from ADTC judged hardware.",
+      "recommended_mitigations": [
+        "Add a minimum cooldown/rate-limit between consecutive inference calls in ui/app.py to prevent sustained back-to-back load in real usage",
+        "Re-run this test on the actual ADTC judged hardware (or equivalent bare-metal Ubuntu 22.04) before final submission, using benchmarks/thermal_monitor.py with real lm-sensors access",
+        "Consider testing with realistic inter-query gaps (e.g. 30-60s, matching expected farmer usage pattern) rather than continuous back-to-back load",
+        "Monitor CPU frequency governor settings (cpupower frequency-info) \u2014 ensure not stuck in a high-power mode unnecessarily"
+      ]
+    }
+  },
+  "phase_1_success_criteria": {
+    "model_loads_under_30s": true,
+    "peak_ram_le_7gb": true,
+    "peak_ram_actual_gb": 3.652,
+    "tps_ge_15": true,
+    "tps_actual": 17.694,
+    "cpu_temp_stays_under_80c_during_5min_inference": false,
+    "cpu_temp_actual_max_c": 98,
+    "all_benchmarks_logged_to_json": true
+  },
+  "decision": "PROCEED with Phi-3-mini Q4_K_M. TPS and RAM targets both pass with meaningful margin (TPS +18%, RAM has 3.35GB headroom). Thermal target failed under a worst-case continuous-load test; this is treated as a design constraint for Phase 3 (rate-limiting between UI queries) rather than a reason to pivot models, since realistic single-query farmer usage will not sustain sensor readings this way. Final thermal validation should be repeated on real ADTC hardware before submission."
+}

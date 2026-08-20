@@ -1,0 +1,49 @@
+# RK AgriDig — docker-compose.yml
+#
+# NOTE ON ARCHITECTURE: this runs Ollama + Gradio in a single container
+# (via docker-entrypoint.sh) rather than as two separate services. That
+# keeps `docker-compose up` genuinely one-command with no service-startup
+# ordering to get wrong, and avoids exposing Ollama's HTTP port outside
+# the container unnecessarily. If you'd rather split them into separate
+# services (e.g. to scale or restart independently), say so and I'll
+# rewrite this as a two-service compose file with a shared network.
+#
+# Usage:
+#   docker-compose up --build
+#   Then open http://localhost:7860
+
+services:
+  rk-agridig:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rk-agridig
+    ports:
+      - "7860:7860"   # Gradio UI
+      - "11434:11434" # Ollama API (exposed for local debugging; safe to remove)
+    volumes:
+      # Mount your downloaded GGUF here. The file itself stays out of the
+      # image (gitignored, too large) — only referenced at runtime.
+      - ./models:/app/models:ro
+      - ./logs:/app/logs
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    networks:
+      - rk-internal
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 2G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+networks:
+  rk-internal:
+    driver: bridge

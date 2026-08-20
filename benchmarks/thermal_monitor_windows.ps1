@@ -157,7 +157,14 @@ catch [System.Management.Automation.PipelineStoppedException] {
 }
 
 # --- Write raw log ---
-$logLines | Set-Content -Path $logPath -Encoding utf8
+# NOTE: Set-Content -Encoding utf8 (and utf8NoBOM, which doesn't exist in
+# Windows PowerShell 5.1 at all -- only PowerShell 6+) both have BOM issues
+# on this system. Writing directly via .NET's UTF8Encoding($false) avoids
+# the BOM on every PowerShell version, and is the fix confirmed to work on
+# Windows PowerShell 5.1 specifically (the version this project runs on --
+# see "Windows PowerShell" banner, not "PowerShell 7").
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($logPath, ($logLines -join "`n") + "`n", $utf8NoBom)
 
 # --- Compute summary ---
 $validTemps = $readings | ForEach-Object { $_.temp_c }
@@ -187,7 +194,7 @@ if ($validTemps.Count -gt 0) {
     $summary.exceeded_target_ceiling = ($stats.Maximum -ge $AdtcTargetCeilingC)
 }
 
-$summary | ConvertTo-Json -Depth 5 | Set-Content -Path $summaryPath -Encoding utf8
+$summary | ConvertTo-Json -Depth 5 | Out-String | ForEach-Object { [System.IO.File]::WriteAllText($summaryPath, $_.TrimEnd() + "`n", $utf8NoBom) }
 
 # --- Print summary ---
 Write-Host ""

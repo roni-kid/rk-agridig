@@ -1,0 +1,10 @@
+# RK AgriDig — Python dependencies
+# Phase 3 (UI + Ollama integration) — confirmed used by ui/app.py and src/ollama_client.py
+gradio>=4.0,<6.0
+requests>=2.31
+
+# Phase 1/2 (model download, benchmarking, evaluation) — add/uncomment as needed
+# huggingface_hub>=0.20
+# sentence-transformers>=2.2
+# nltk>=3.8       # BLEU scoring
+# psutil>=5.9     # RAM/thermal monitoring

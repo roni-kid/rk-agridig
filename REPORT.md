@@ -40,6 +40,20 @@ Download completed in 10m 46s at an average 3.53 MB/s.
 Ubuntu 22.04-compatible toolchains. `llama-cli`, `llama-bench`, and
 `llama-server` all built and verified working via a sanity inference call.
 
+**Correction — OpenBLAS was likely never actually active.** `setup.sh`
+configures CMake with `-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS`, but the
+real benchmark output (`llama_bench_raw.json`) reports `"backends": "CPU"`
+with no BLAS designation. Per llama.cpp's own behavior, an active BLAS
+backend reports as `"BLAS,..."`, not bare `"CPU"` (confirmed via
+[ggml-org/llama.cpp#25547](https://github.com/ggml-org/llama.cpp/issues/25547)).
+The setup run also hit real `apt`/dpkg lock permission errors while
+installing OpenBLAS dev headers. Taken together, this strongly suggests
+OpenBLAS was configured but never actually linked in — meaning the
+Phase 1 performance numbers below were achieved on llama.cpp's native
+CPU backend alone. This isn't necessarily bad news (the result already
+clears the ADTC target without acceleration), but any earlier claim of
+OpenBLAS providing a speedup should be treated as unverified.
+
 ### Task 1.3 — Performance Profiling
 
 `benchmarks/run_profiler.sh` wraps `llama-bench` (prompt-processing and
@@ -66,10 +80,21 @@ profiler run — with concurrent RAM-sampling overhead included — produced:
 
 | Metric | Target | Result | Status |
 |---|---|---|---|
-| Throughput | ≥15 TPS | **17.69 TPS** | ✅ Pass (+18%) |
+| Throughput (text-generation, batch=1) | ≥15 TPS | **17.69 TPS** (mean of 3 runs) | ✅ Pass (+18%) |
 | Peak RAM | ≤7GB | **3.65 GB** | ✅ Pass (3.35GB headroom) |
 
-Full results: `benchmarks/results/performance_metrics.json`.
+**Variance note:** the 17.69 TPS figure is a mean across 3 benchmark runs
+with meaningful spread (stddev 3.00; individual runs measured 20.16, 18.56,
+and 14.36 TPS). The lowest individual run (14.36 TPS) falls *below* the 15
+TPS target — the mean passes, but not every run would. Separately,
+prompt-processing throughput at batch=1 measured 15.54 TPS (stddev 0.81) —
+also passing, but with a much smaller margin (+3.6%) than the
+text-generation figure typically cited. Both are legitimate readings of
+"throughput" depending on which ADTC scores against; worth flagging both
+figures rather than only the more favorable one.
+
+Full results: `benchmarks/results/performance_metrics.json`,
+`benchmarks/llama_bench_raw.json` (per-run data).
 
 ### Task 1.4 — Thermal Monitoring
 
@@ -93,9 +118,18 @@ CPU was not at a cold baseline at test start (91°C initial reading).
 
 | Metric | Target | Result | Status |
 |---|---|---|---|
-| Avg temp | — | 63.4°C | — |
+| Avg temp | — | **87.1°C** (corrected — see note below) | — |
 | Max temp | <80°C (target), <85°C (disqualification) | **98°C** | ❌ Exceeds both |
-| Sustained >80°C | avoid | ~200 seconds | ❌ |
+| Sustained >80°C | avoid | ~211-217 seconds (out of ~302s total) | ❌ |
+
+**Correction:** an earlier version of this report incorrectly stated the
+average temperature as 63.4°C (a transcription error made while summarizing
+results). The correct figure, independently re-verified against the raw
+`thermal_logs_windows.txt` data and matching `thermal_summary_windows.json`
+exactly, is **87.08°C** — meaning the CPU spent the *majority* of the
+5-minute test above both the 80°C target and the 85°C disqualification
+threshold, not just briefly spiking above it. This is a materially more
+serious result than originally reported and should be treated accordingly.
 
 The load-correlated climb (91°C → 98°C plateau → steady cooldown to 66°C
 after the loop ended) confirms this is a genuine thermal response to
