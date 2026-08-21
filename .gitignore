@@ -2,7 +2,7 @@
 models/*.gguf
 models/*.bin
 models/*.safetensors
-models/Phi-3-mini-4k-instruct/
+models/Phi-3-mini-4k-instruct
 models/phi3_mini_4k_instruct.gguf
 
 # Dataset (already on HuggingFace)

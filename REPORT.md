@@ -164,8 +164,69 @@ size running continuously with no pauses.
 
 ## Phase 2: Prompt Engineering & Evaluation
 
-*Not yet started.*
+**Status:** 🔶 In progress (Tasks 2.1–2.3 complete, Task 2.4 outstanding)
+
+### Task 2.1 — System Prompt Variants
+
+Three system prompt variants were drafted — **conservative**, **balanced**,
+and **aggressive** — trading off strictness of the structured-output format
+against flexibility for edge cases (e.g. symptoms that don't map cleanly to
+a known disease). All three were verified to stay under the 500-token
+budget using the real Phi-3 tokenizer (`llama-tokenize`), not an estimate.
+
+### Task 2.2 — Evaluation Dataset
+
+The evaluation set was extracted from `toufiqmusah/GhanaAgricVQA-Dataset`.
+The dataset viewer's preview initially suggested `disease_labels` was a
+nested dict, which turned out to be a misrepresentation — the real schema,
+confirmed empirically by loading actual rows, is:
+
+- `answer_text`: plain string
+- `disease_labels`: a flat list (not nested)
+
+This matters because `src/evaluator.py`'s parsing logic is written against
+the real flat-list schema; code written against the dataset-viewer's
+apparent structure would have silently mismatched at evaluation time.
+
+### Task 2.3 — Evaluator
+
+`src/evaluator.py` is complete and implements:
+
+- **BLEU-4** via `sacrebleu`, normalized to a 0–1 range
+- **Semantic similarity** via `all-MiniLM-L6-v2` sentence embeddings
+- **Disease name normalization** — strips crop-name prefixes (e.g.
+  `Corn_`, `Pepper_`) before comparing predicted vs. reference disease
+  labels, so a correct diagnosis isn't penalized for prefix mismatch
+- **Question-type-aware structure compliance** — checks that
+  Identification/Treatment/Prevention questions get responses matching
+  the expected section structure for that question type
+
+### Task 2.4 — Batch Evaluation Runner
+
+**Not yet complete.** The `PrompEngine` batch evaluation runner (which will
+run all three prompt variants from Task 2.1 against the Task 2.2 dataset
+using the Task 2.3 evaluator, and report comparative scores) is the next
+piece of work, along with finalizing `requirements.txt` for the evaluation
+dependencies it introduces.
+
+### Outstanding thermal risk (carried over from Phase 1)
+
+The Task 1.4 sustained-load thermal finding (87.1°C avg, 98°C peak,
+exceeding both the 80°C target and 85°C disqualification threshold) has
+not yet been mitigated or re-tested on bare-metal hardware. This remains
+open and should not be considered resolved by Phase 2 progress.
 
 ## Phase 3: UI & Deployment
 
-*Not yet started.*
+**Status:** 🔶 In progress
+
+The Gradio interface (`ui/app.py`) has been visually restyled to a dark
+navy/lime aesthetic (matching an internal design reference,
+`index.html`), replacing an earlier slate/emerald theme. This was a
+visual-only pass — the diagnosis pipeline, bilingual (English/Twi)
+toggle, and Ollama integration in `src/ollama_client.py` were not
+modified as part of the restyle.
+
+The Phase 1 thermal mitigation (rate-limiting/cooldown between
+consecutive UI-triggered inference calls) discussed above has **not**
+yet been implemented in `ui/app.py` and remains outstanding.

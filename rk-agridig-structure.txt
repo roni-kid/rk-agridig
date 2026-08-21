@@ -2,6 +2,7 @@ rk-agridig/
 ├── README.md
 ├── REPORT.md
 ├── PROMPTS.md
+├── CONTRIBUTORS.md          ← new
 ├── requirements.txt          ← new
 ├── setup.sh
 ├── Dockerfile               ← new

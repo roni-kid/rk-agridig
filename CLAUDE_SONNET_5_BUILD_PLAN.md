@@ -237,7 +237,7 @@ Create `ui/app.py` — a Gradio web interface for RK AgriDig that:
 5. History: Optional chat-like interface showing past queries
 
 6. Design:
-   - Theme: Green + blue color scheme (matching RK AgriDig branding)
+   - Theme: thumbail.png
    - Mobile-friendly layout
    - Simple, no advanced features
    - Loading indicator while model processes

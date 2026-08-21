@@ -5,6 +5,9 @@ Bridge between the Gradio UI and the locally-running Ollama server
 (serving the quantized Phi-3-mini GGUF model). All inference stays
 on-device: no cloud calls, no external API keys.
 
+Built for the Africa Deep Tech Challenge 2026.
+Team: Aaron Baidoo (RoniKid) & Firdaus Kudus (github.com/KudusFirdaus)
+
 Public interface:
     client = OllamaClient()
     client.health_check() -> bool
@@ -189,6 +192,7 @@ class OllamaClient:
             "system": SYSTEM_PROMPT,
             "prompt": user_prompt,
             "stream": False,
+                "keep_alive": -1,
             "options": {
                 "temperature": 0.3,
                 "num_predict": 512,

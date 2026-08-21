@@ -133,7 +133,7 @@ Prevention for next season:
   - `benchmarker.py` — Performance profiling (TPS, RAM)
 - **`data/`** — GhanaAgricVQA dataset (train/test splits)
 - **`models/`** — Phi-3-mini GGUF (quantized, ~2.3GB)
-- **`ui/`** — Gradio web interface
+- **`ui/`** — Gradio web interface (dark navy/lime theme)
 - **`benchmarks/`** — Performance results & thermal monitoring
 - **`docs/`** — Setup, usage, and architecture guides
 
@@ -207,7 +207,8 @@ This project is built for the **Africa Deep Tech Challenge 2026** — a hackatho
 
 ## 🤝 Contributing
 
-This is a solo project for ADTC 2026, but feedback and improvements are welcome after the competition.
+Built by a two-person team for ADTC 2026 (see Contact below). Feedback and
+improvements are welcome after the competition.
 
 ## 📜 License
 
@@ -218,7 +219,7 @@ This project is released under **CC-BY 4.0** to match the GhanaAgricVQA dataset 
 ```bibtex
 @misc{rk_agridig_2026,
   title={RK AgriDig: Offline Crop Disease Diagnostic for African Smallholder Farmers},
-  author={Aaron Baidoo (RoniKid)},
+  author={Aaron Baidoo (RoniKid) and Firdaus Kudus},
   year={2026},
   publisher={GitHub},
   url={https://github.com/roni-kid/rk-agridig}
@@ -238,10 +239,12 @@ Dataset citation:
 
 ## 📞 Contact
 
-Built by **RoniKid (Aaron Baidoo)** — Computer Engineering student at GCTU, Ghana.
+Built by **RoniKid (Aaron Baidoo)** and **Firdaus Kudus**.
 
-- GitHub: [@roni-kid](https://github.com/roni-kid)
-- LinkedIn: [Aaron Baidoo](https://linkedin.com/in/aaronbaidoo)
+- Aaron: Computer Engineering student at GCTU, Ghana · GitHub [@roni-kid](https://github.com/roni-kid) · LinkedIn [Aaron Baidoo](https://linkedin.com/in/aaronbaidoo)
+- Firdaus: Computer Engineering student at GCTU, Ghana . GitHub [@KudusFirdaus](https://github.com/KudusFirdaus)  · LinkedIn [Firdaus Kudus](https://www.linkedin.com/in/firdaus-kudus-735864387/)
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for a breakdown of who worked on what.
 
 ---
 
