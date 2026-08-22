@@ -4,7 +4,7 @@
 
 An on-device crop disease diagnostic and advisory system for smallholder farmers in Ghana and West Africa. Runs entirely offline on commodity 8GB laptops — no internet, no API costs, no cloud dependency.
 
-![RK AgriDig Banner](assets/banner.png)
+![RK AgriDig Banner](thumbail.png)
 
 ## 🌍 The Problem
 
@@ -238,10 +238,10 @@ Dataset citation:
 
 ## 📞 Contact
 
-Built by **RoniKid (Aaron Baidoo)** — Computer Engineering student at GCTU, Ghana.
+Built by Aaron and Firdaus
 
-- GitHub: [@roni-kid](https://github.com/roni-kid)
-- LinkedIn: [Aaron Baidoo](https://linkedin.com/in/aaronbaidoo)
+- GitHub: [@roni-kid](https://github.com/roni-kid) & [Kudus Firdaus](https://github.com/KudusFirdaus)
+- LinkedIn: [Aaron Baidoo](https://linkedin.com/in/aaronbaidoo) & [Firdaus Kudus](https://www.linkedin.com/in/firdaus-kudus-735864387/)
 
 ---
 
