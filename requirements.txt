@@ -1,10 +1,47 @@
 # RK AgriDig — Python dependencies
-# Phase 3 (UI + Ollama integration) — confirmed used by ui/app.py and src/ollama_client.py
-gradio>=4.0,<6.0
-requests>=2.31
+# Target: Python >= 3.11, CPU-only, offline-first (Ubuntu 22.04 LTS dev target,
+# WSL2 dev environment). Model inference itself runs through the local Ollama
+# server / llama.cpp -- these packages cover the Gradio UI, the HTTP bridge to
+# Ollama, and the Phase 2 offline evaluation pipeline (batch runner + scorer).
+#
+# Install with:
+#   pip install -r requirements.txt --break-system-packages
+# (--break-system-packages needed on Debian/Ubuntu system Python; omit if
+# installing inside a venv/virtualenv, which is the recommended setup.)
 
-# Phase 1/2 (model download, benchmarking, evaluation) — add/uncomment as needed
-# huggingface_hub>=0.20
-# sentence-transformers>=2.2
-# nltk>=3.8       # BLEU scoring
-# psutil>=5.9     # RAM/thermal monitoring
+# --- UI (app.py) ---
+gradio>=4.44,<5.0
+
+# --- Ollama HTTP bridge (src/ollama_client.py) ---
+requests>=2.31,<3.0
+
+# --- Phase 2 evaluation (src/evaluator.py, src/prompt_engine.py) ---
+# sacrebleu: standardized, reproducible BLEU-4 scoring (not nltk -- see
+# evaluator.py's module docstring for why).
+sacrebleu>=2.4,<3.0
+
+# sentence-transformers pulls in torch + transformers + numpy as transitive
+# dependencies automatically -- pinned here only at the top level so the
+# actually-used all-MiniLM-L6-v2 embedding model loads correctly.
+#
+# IMPORTANT (CPU-only target hardware): a bare `pip install sentence-transformers`
+# on Linux will pull the CUDA-enabled torch build by default, which drags in
+# several GB of unused NVIDIA wheels on this AMD/CPU-only machine. Install the
+# CPU-only torch wheel FIRST, then this file, e.g.:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu --break-system-packages
+#   pip install -r requirements.txt --break-system-packages
+sentence-transformers>=3.0,<4.0
+
+# scikit-learn: only used for cosine_similarity in evaluator.py's semantic
+# similarity metric -- a full ML framework is overkill for one function, but
+# it's the standard, well-tested implementation and already a transitive dep
+# of several other packages in this list.
+scikit-learn>=1.4,<2.0
+
+# --- Note on what's intentionally NOT listed here ---
+# llama.cpp / llama-bench / Ollama itself: native binaries, not pip packages.
+# See docs/PROMPTING_STRATEGY.md and Phase 1 notes for build/install steps.
+# adtc-profiler: installed separately per its own README
+# (pip install "git+https://github.com/Africa-Deep-Tech-Foundation/adtc-profiler.git"),
+# kept out of this file since it's a competition submission/scoring tool, not
+# a runtime dependency of RK AgriDig itself.

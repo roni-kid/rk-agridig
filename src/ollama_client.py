@@ -5,9 +5,6 @@ Bridge between the Gradio UI and the locally-running Ollama server
 (serving the quantized Phi-3-mini GGUF model). All inference stays
 on-device: no cloud calls, no external API keys.
 
-Built for the Africa Deep Tech Challenge 2026.
-Team: Aaron Baidoo (RoniKid) & Firdaus Kudus (github.com/KudusFirdaus)
-
 Public interface:
     client = OllamaClient()
     client.health_check() -> bool
@@ -106,8 +103,8 @@ class OllamaClient:
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
-        model_name: str = "phi3agridig",
-        timeout_seconds: int = 90,
+        model_name: str = "phi3-agridig",   # must match `ollama create <name> -f Modelfile`
+        timeout_seconds: int = 150,          # headroom: ~32s cold tg + model load + Docker overhead
         max_retries: int = 3,
         retry_backoff_seconds: float = 2.0,
     ):
@@ -187,15 +184,26 @@ class OllamaClient:
         """
         user_prompt = self._build_user_prompt(question, crop, question_type)
 
+        # Token budget by question type.
+        # Identification needs all 4 sections → more tokens.
+        # Treatment / Prevention are single-section answers → cap lower.
+        # Tighter caps = faster responses + less thermal load on sustained use.
+        # At ~17 TPS: 300 tok ≈ 18s, 200 tok ≈ 12s, 150 tok ≈ 9s.
+        num_predict_by_type = {
+            "Identification": 300,
+            "Treatment": 200,
+            "Prevention": 150,
+        }
+        num_predict = num_predict_by_type.get(question_type, 300)
+
         payload = {
             "model": self.model_name,
             "system": SYSTEM_PROMPT,
             "prompt": user_prompt,
             "stream": False,
-                "keep_alive": -1,
             "options": {
                 "temperature": 0.3,
-                "num_predict": 512,
+                "num_predict": num_predict,
             },
         }
 

@@ -220,13 +220,56 @@ open and should not be considered resolved by Phase 2 progress.
 
 **Status:** 🔶 In progress
 
-The Gradio interface (`ui/app.py`) has been visually restyled to a dark
-navy/lime aesthetic (matching an internal design reference,
-`index.html`), replacing an earlier slate/emerald theme. This was a
-visual-only pass — the diagnosis pipeline, bilingual (English/Twi)
-toggle, and Ollama integration in `src/ollama_client.py` were not
-modified as part of the restyle.
+The Gradio interface (`ui/app.py`) was restyled to a dark navy/lime
+aesthetic (matching an internal design reference, `index.html`), replacing
+an earlier slate/emerald theme.
 
-The Phase 1 thermal mitigation (rate-limiting/cooldown between
-consecutive UI-triggered inference calls) discussed above has **not**
-yet been implemented in `ui/app.py` and remains outstanding.
+**This was initially shipped as visual-only and untested in a real browser.**
+A follow-up pass launched the app with a stubbed `OllamaClient` (no real
+Ollama server available in the dev sandbox) and drove it with Playwright, a
+headless browser — clicking through the actual UI rather than only checking
+that the Python built without errors. This surfaced three real bugs, all
+pre-existing and unrelated to the visual restyle itself, exposed only because
+the app was actually clicked rather than statically reviewed:
+
+1. **Page failed to hydrate entirely.** `demo.load(js="...")` used bare
+   top-level JS statements; the installed Gradio version (6.25.0) requires
+   `js=` to be a function expression (`() => {...}`). Without this, the app
+   never got past its own loading splash screen in a real browser — a
+   complete failure that a Python-only "does it build" check cannot catch.
+2. **The English/Twi language toggle was completely non-functional.** The
+   hidden trigger buttons used `visible=False`, which in Gradio 6.x removes
+   the element from the DOM entirely (older Gradio only applied
+   `display:none`). The JS click-forwarding hook that the header buttons
+   rely on found nothing to click. Fixed by hiding the trigger buttons via
+   a CSS visually-hidden class instead, keeping them in the DOM.
+3. **The active-state highlight on the language toggle never updated.**
+   A `lang_js` snippet that correctly swaps the `.active` class between
+   the English/Twi buttons existed in the code but was never actually
+   attached to either button's `.click()` handler — dead code. Wired in.
+
+A fourth issue was cosmetic rather than functional: several form elements
+(the crop dropdown, the question-type radio pills, the history search box)
+rendered with a light-grey background instead of the intended dark theme.
+This traced to Gradio's own internal `.form` wrapper class, which ships a
+hardcoded light background and sits between the custom `.tactile-card`
+container and the individual inputs. Fixed with a targeted override.
+
+**Verified via headless-browser screenshots after fixes:**
+- Full diagnosis flow (form fill → submit → parsed disease/symptoms/
+  treatment/prevention rendering in the report card → scan history update)
+  works end-to-end against a stubbed inference response.
+- The Twi toggle now genuinely translates all visible labels, placeholders,
+  and button text, and the active-state highlight moves correctly.
+- All form controls render with the intended dark theme.
+
+**Still not tested / outstanding:**
+- Never tested against a **real** Ollama server — only a stubbed
+  `OllamaClient` returning a canned response. Real latency, real model
+  output formatting edge cases (e.g. the model not following the expected
+  `Disease Name: / Symptoms: / ...` structure), and the actual error/retry
+  path against a genuinely unreachable Ollama server are unverified.
+- Responsive/mobile breakpoints are untested.
+- The Phase 1 thermal mitigation (rate-limiting/cooldown between
+  consecutive UI-triggered inference calls) has **not** been implemented
+  in `ui/app.py` and remains outstanding.

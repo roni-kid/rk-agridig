@@ -4,8 +4,13 @@
 #
 # Usage (done automatically by docker-entrypoint.sh, or manually):
 #   ollama create phi3-agridig -f Modelfile
+#
+# NOTE: The FROM path must point to the container-side mount location, NOT
+# your host Windows path. The GGUF is mounted read-only at /app/models/ via
+# the volume defined in docker-compose.yml. Changing this to the host path
+# will break `ollama create` inside Docker.
 
-FROM /mnt/c/Users/rocks/Documents/Africa Deep Tech Challenge/rk-agridig/models/phi3_mini_4k_instruct.gguf
+FROM ./models/phi3_mini_4k_instruct.gguf
 
 PARAMETER temperature 0.3
 PARAMETER num_predict 512
