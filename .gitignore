@@ -1,30 +1,98 @@
-# Model files (too large for GitHub)
+# =============================================================================
+# RK AgriDig — .gitignore
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Model files (too large for GitHub — 2.3GB+)
+# -----------------------------------------------------------------------------
 models/*.gguf
 models/*.bin
 models/*.safetensors
-models/Phi-3-mini-4k-instruct
-models/phi3_mini_4k_instruct.gguf
+models/Phi-3-mini-4k-instruct/
 
-# Dataset (already on HuggingFace)
+# Keep the download script
+!models/download_model.py
+
+# -----------------------------------------------------------------------------
+# Dataset (lives on HuggingFace — don't duplicate it)
+# Both naming variants covered (VOA was a known typo that 404s)
+# -----------------------------------------------------------------------------
 data/ghanaagricvoa/
+data/GhanaAgricVQA/
+data/ghanaagricvqa/
 
-# Demo video (host on YouTube/Vimeo)
+# Keep the eval set — judges need this for Sacc scoring
+!data/eval_samples.json
+
+# -----------------------------------------------------------------------------
+# llama.cpp (cloned by setup.sh — too large for the repo)
+# Use as a submodule or ignore entirely; don't commit the full clone
+# -----------------------------------------------------------------------------
+llama.cpp/
+
+# -----------------------------------------------------------------------------
+# Runtime logs directory (created at startup by ollama_client.py)
+# -----------------------------------------------------------------------------
+logs/
+
+# -----------------------------------------------------------------------------
+# Outputs — ignore bulk outputs, keep screenshots for ADTC DevPost
+# -----------------------------------------------------------------------------
 outputs/demo_video.mp4
+outputs/*.mp4
+outputs/*.mov
 
+# Keep demo screenshots (required for DevPost submission)
+!outputs/demo_screenshots/
+!outputs/demo_screenshots/**
+
+# -----------------------------------------------------------------------------
 # Python environment
+# -----------------------------------------------------------------------------
 venv/
+.venv/
+env/
 __pycache__/
+**/__pycache__/
 *.pyc
+*.pyo
+*.pyd
 .env
+.env.*
 
-# llama.cpp build artifacts
-llama.cpp/build/
-llama.cpp/*.o
-local/
+# Python packaging artifacts
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
 
+# -----------------------------------------------------------------------------
+# Benchmark raw dumps (keep summary JSONs, ignore large raw logs)
+# -----------------------------------------------------------------------------
+benchmarks/results/thermal_logs.txt
+
+# Keep ADTC scoring evidence
+!benchmarks/results/performance_metrics.json
+!benchmarks/results/accuracy_metrics.json
+
+# -----------------------------------------------------------------------------
+# Runtime sentinel / marker files
+# -----------------------------------------------------------------------------
+_setup-complete
+.setup-complete
+
+# -----------------------------------------------------------------------------
 # OS files
+# -----------------------------------------------------------------------------
 .DS_Store
 Thumbs.db
+desktop.ini
+*.swp
+*.swo
 
-# Logs (optional — keep results JSONs, skip raw logs)
-*.log
+# -----------------------------------------------------------------------------
+# HuggingFace & sentence-transformers cache (if downloaded into project root)
+# -----------------------------------------------------------------------------
+.cache/
