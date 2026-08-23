@@ -26,10 +26,14 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 import gradio as gr
+import numpy as np
 
 # Allow `python ui/app.py` to find the sibling src/ package regardless of cwd.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.ollama_client import OllamaClient, InferenceResult  # noqa: E402
+from src.knowledge_base import render_crop_guide_html  # noqa: E402
+from src.image_symptom_extractor import build_augmented_question, ImageSymptomSignals  # noqa: E402
+from src.voice_output import speak_diagnosis, speech_status_message  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Config
@@ -46,6 +50,31 @@ COOLDOWN_OPTIONS = [10, 15, 20, 25, 30]
 CROPS = ["Maize", "Pepper", "Tomato"]
 QUESTION_TYPES = ["Identification", "Treatment", "Prevention"]
 CROP_EMOJIS = {"Maize": "🌽", "Pepper": "🌶️", "Tomato": "🍅"}
+
+# Minimal single-color vector icons for the crop picker (Scan a Leaf tab).
+# Hand-authored, no external icon library dependency — keeps the offline
+# tool free of any CDN/network requirement for UI chrome. Each is a flat
+# outline silhouette (not a literal photo-realistic drawing) so it reads
+# clearly at card size and recolors cleanly via `currentColor`.
+CROP_SVG_ICONS = {
+    "Maize": """<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M32 6c6 8 9 18 9 28 0 12-4 20-9 24-5-4-9-12-9-24 0-10 3-20 9-28z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+        <path d="M32 14v42" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M25 20c2 1 4 1 7 1M39 20c-2 1-4 1-7 1M24 28c2.5 1.2 5 1.2 8 1.2M40 28c-2.5 1.2-5 1.2-8 1.2M24 36c2.5 1.2 5 1.2 8 1.2M40 36c-2.5 1.2-5 1.2-8 1.2M25 44c2 1 4.5 1 7 1M39 44c-2 1-4.5 1-7 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M20 12c-3 3-4 8-3 12M44 12c3 3 4 8 3 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>""",
+    "Pepper": """<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M30 10c-1-3-4-4-7-3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M29 9c2 2 2 5 1 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M30 16c9 0 15 8 14 19-1 11-8 21-16 21-9 0-14-9-14-19 0-11 7-21 16-21z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+        <path d="M22 24c-2 6-2 14 1 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>""",
+    "Tomato": """<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M32 20c10 0 17 8 17 18s-7 18-17 18-17-8-17-18 7-18 17-18z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+        <path d="M32 20v-4M26 17l-3-5M38 17l3-5M22 19c-2-2-2-4-1-6M42 19c2-2 2-4 1-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20 34c1-5 6-8 12-8s11 3 12 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.6"/>
+    </svg>""",
+}
 
 VIEWS = ["dashboard", "scan", "treatments", "knowledge", "history", "settings"]
 NAV_ICONS = {
@@ -101,9 +130,13 @@ TEXTS = {
         "q_id": "Identification", "q_treat": "Treatment", "q_prev": "Prevention",
         "symptom_lbl": "Describe Symptoms",
         "symptom_ph": "E.g., My maize leaves have brown spots with yellow halos...",
+        "image_lbl": "Add a leaf photo (optional)",
         "btn_submit": "Get Expert Diagnosis",
         "btn_analyzing": "Analyzing... (~25s)",
         "btn_clear": "Clear",
+        "btn_voice": "🔊 Listen to diagnosis",
+        "btn_voice_loading": "Generating audio...",
+        "voice_unsupported_tw": "🔇 Voice narration isn't available in Twi yet — the offline speech engine has no Twi voice data.",
         "ai_diag": "AI Diagnosis",
         "local_model": "Local model",
         "empty_diag_title": "Your diagnosis will appear here",
@@ -181,9 +214,14 @@ TEXTS = {
         "q_id": "Hunhu", "q_treat": "Adwuma", "q_prev": "Akwan a wɔfa so siw ano",
         "symptom_lbl": "Kyerɛkyerɛ Nsɛnkyerɛnne",
         "symptom_ph": "Sɛ nhwɛso: Me aburow nhaban wɔ nsensanee tuntum a akokɔsradeɛ atwa ho hyia...",
+        "image_lbl": "Fa ahaban mfonini bi ka ho (ɛnhia)",
         "btn_submit": "Hwehwɛ Ɔyare",
         "btn_analyzing": "Ɛrehwehwɛ... (~25s)",
         "btn_clear": "Pepa",
+        "btn_voice": "🔇 Nne kenkan nni ha koraa Twi mu",
+        "btn_voice_loading": "Ɛreyɛ nne...",
+        "voice_unsupported_tw": "🔇 Nne kenkan nni ha koraa Twi mu — dɛvaes no nni Twi nne data.",
+        "kb_tw_pending": "Nkyerɛmu a emu dɔ no wɔ Borɔfo kasa mu nko ara seesei — ɔyare nsɛmfua nkyerɛase retwɛn nhwehwɛmu.",
         "ai_diag": "AI Ɔyare Hunhu",
         "local_model": "Ɛwɔ dɛvaes so",
         "empty_diag_title": "Wo ɔyare hunhu bɛba ha",
@@ -231,6 +269,7 @@ TEXTS = {
 # over cleanly from the comparison file where they were simpler than mine.
 # ---------------------------------------------------------------------------
 CUSTOM_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Sora:wght@600;700;800&display=swap');
 :root{
   --navy:#061d32; --navy2:#092941; --panel:#0d3048; --panel2:#123a53;
   --green:#83c62d; --green2:#4f9f2a; --lime:#a8dd43; --blue:#26b7ee;
@@ -240,7 +279,12 @@ CUSTOM_CSS = """
 body, .gradio-container {
     background: linear-gradient(135deg,#041725,#08263b 55%,#061b2e) !important;
     color: var(--text) !important;
-    font-family: Inter, 'Segoe UI', Arial, sans-serif !important;
+    font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important;
+    font-feature-settings: "cv11", "ss01";
+}
+.rk-page-title, .rk-brand b, .rk-med-disease, .rk-card-head h2, .rk-guide-panel h4 {
+    font-family: 'Sora', 'Inter', 'Segoe UI', Arial, sans-serif !important;
+    letter-spacing: -0.01em;
 }
 .gradio-container { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
 .gradio-container > .main, .gradio-container .contain { max-width: 100% !important; width: 100% !important; }
@@ -404,6 +448,25 @@ footer { display: none !important; }
 .rk-card table { width:100%; border-collapse: collapse; }
 .rk-card table th, .rk-card table td { text-align:left; padding:13px 9px; border-bottom:1px solid var(--line); font-size:12px; color: var(--text); }
 .rk-card table th { color: var(--muted); font-weight:600; }
+
+/* ---------- Crop icon picker (Scan a Leaf tab) ---------- */
+.rk-crop-grid { display:flex; gap:12px; margin-bottom: 6px; }
+.rk-crop-card, .rk-crop-card button {
+    flex: 1 !important; display:flex !important; flex-direction:column !important; align-items:center !important;
+    gap:8px !important; padding:16px 8px !important; border-radius:14px !important;
+    border:1.5px solid var(--line) !important; background: rgba(255,255,255,.03) !important;
+    color: var(--muted) !important; font-size:13px !important; font-weight:700 !important;
+    box-shadow:none !important; transition: border-color .15s, background .15s, color .15s;
+}
+.rk-crop-card svg { width:34px; height:34px; }
+.rk-crop-card button:hover { border-color: rgba(131,198,45,.4) !important; color: var(--text) !important; }
+.rk-crop-card-active, .rk-crop-card-active button {
+    border-color: var(--green) !important;
+    background: linear-gradient(160deg, rgba(131,198,45,.16), rgba(38,183,238,.05)) !important;
+    color: var(--text) !important;
+}
+.rk-crop-card-active svg { color: var(--green) !important; }
+.rk-crop-picker-label { font-size:.85em; font-weight:600; color:var(--muted); margin-bottom:8px; display:block; }
 
 /* ---------- Knowledge cards ---------- */
 .rk-article { padding:18px; border:1px solid var(--line); border-radius:15px; background: rgba(255,255,255,.03); height: 100%; }
@@ -589,11 +652,18 @@ def knowledge_cards_html(t: dict) -> str:
 
 
 def guide_html(crop: str, t: dict) -> str:
-    key = {"maize": "guide_maize", "pepper": "guide_pepper", "tomato": "guide_tomato"}[crop]
-    return (
-        f"<div class='rk-guide-panel'><h4>{t[key + '_h']}</h4>"
-        f"<p>{t[key + '_common']}</p><p>{t[key + '_tip']}</p></div>"
-    )
+    # Structured per-disease reference (symptoms/causes/treatment/prevention)
+    # from src/knowledge_base.py, replacing the earlier two-sentence summary.
+    # English-only for now — see knowledge_base.py docstring on why the Twi
+    # translation of disease terminology needs a real review pass before
+    # shipping rather than a rough guess.
+    if t is TEXTS.get("tw"):
+        return (
+            f"<div class='rk-guide-panel'><p style='color:var(--muted); font-style:italic;'>"
+            f"{t.get('kb_tw_pending', 'Detailed guide is English-only for now — translation of medical terms is pending review.')}"
+            f"</p>{render_crop_guide_html(crop)}</div>"
+        )
+    return render_crop_guide_html(crop)
 
 
 def settings_offline_row_html(t: dict) -> str:
@@ -634,7 +704,7 @@ def empty_result_html(t: dict) -> str:
 # ---------------------------------------------------------------------------
 def diagnose(question: str, crop: str, question_type: str, history: list,
              scan_times: list, last_request_time: float, lang: str,
-             cooldown_seconds: int, save_history: bool):
+             cooldown_seconds: int, save_history: bool, leaf_image: "np.ndarray | None" = None):
     t = TEXTS[lang]
 
     now = time.time()
@@ -651,6 +721,38 @@ def diagnose(question: str, crop: str, question_type: str, history: list,
         return cooldown_html, history, scan_times, last_request_time
 
     question = (question or "").strip()
+
+    # Combine typed symptoms with photo-derived signals, if a leaf photo was
+    # provided. This runs classical CV heuristics (color/lesion analysis),
+    # NOT the LLM — Phi-3-mini-4k-instruct has no vision tower. See
+    # src/image_symptom_extractor.py for why this design was chosen over a
+    # vision-model swap. image_bgr conversion (RGB->BGR) happens here since
+    # Gradio's numpy Image output is RGB but OpenCV heuristics expect BGR.
+    image_note_html = ""
+    if leaf_image is not None:
+        try:
+            import cv2
+            image_bgr = cv2.cvtColor(leaf_image, cv2.COLOR_RGB2BGR)
+        except Exception:
+            image_bgr = None
+        augmented_question, signals = build_augmented_question(question, image_bgr)
+        question = augmented_question
+        if signals is not None:
+            if signals.analyzed:
+                image_note_html = (
+                    "<div class='rk-med-section' style='border-left-color:#a855f7; margin-top:10px;'>"
+                    "<div class='rk-sec-title'>📷 Photo analysis</div>"
+                    f"<div class='rk-sec-content'>{signals.to_symptom_text()}</div></div>"
+                )
+            elif signals.error:
+                # Honest degrade — image didn't yield usable signals, but we
+                # still proceed with whatever text the farmer typed.
+                image_note_html = (
+                    "<div class='rk-med-section' style='border-left-color:#f59e0b; margin-top:10px;'>"
+                    "<div class='rk-sec-title'>📷 Photo analysis</div>"
+                    f"<div class='rk-sec-content'>{signals.error}</div></div>"
+                )
+
     if not question:
         warning = f"<div class='rk-card' style='text-align:center; color:#f59e0b;'>{t['warn_empty']}</div>"
         return warning, history, scan_times, last_request_time
@@ -671,6 +773,13 @@ def diagnose(question: str, crop: str, question_type: str, history: list,
     elapsed = time.time() - start
     new_last_request_time = time.time()
     response_html = _format_response(result, elapsed)
+
+    if image_note_html:
+        # Append the photo-analysis note after the model's own response so
+        # the farmer can see exactly what the image contributed, distinct
+        # from what the LLM reasoned over.
+        response_html = response_html.replace("</div>\n", "</div>" + image_note_html + "\n", 1) \
+            if "</div>\n" in response_html else response_html + image_note_html
 
     if not save_history:
         # Diagnosis still ran, but the person turned off session history —
@@ -744,13 +853,13 @@ def _format_response(result: InferenceResult, elapsed: float) -> str:
 
 def clear_all(lang: str):
     t = TEXTS[lang]
-    return "", empty_result_html(t)
+    return "", empty_result_html(t), None
 
 
 # ---------------------------------------------------------------------------
 # UI Layout
 # ---------------------------------------------------------------------------
-with gr.Blocks(title="RK AgriDig", theme=THEME, css=CUSTOM_CSS) as demo:
+with gr.Blocks(title="RK AgriDig") as demo:
     # Per-session state — NOT module globals, so one visitor's scans never
     # leak into another visitor's browser tab (fapp.py used module-level
     # lists for this, which is a real bug under concurrent users).
@@ -814,7 +923,43 @@ with gr.Blocks(title="RK AgriDig", theme=THEME, css=CUSTOM_CSS) as demo:
                 )
                 with gr.Row():
                     with gr.Column(scale=5, elem_classes="rk-card"):
-                        crop_dropdown = gr.Dropdown(choices=CROPS, value="Maize", label=TEXTS["en"]["select_crop"])
+                        crop_picker_label = gr.HTML(
+                            f"<span class='rk-crop-picker-label'>{TEXTS['en']['select_crop']}</span>"
+                        )
+                        # Vector crop icons rendered via gr.HTML (which renders raw
+                        # markup, unlike gr.Button's text-escaped label) so the SVGs
+                        # actually paint instead of printing as literal <svg> text.
+                        # Each icon's onclick calls a hidden gr.Button's DOM element
+                        # to fire the real Gradio click event — this indirection is
+                        # necessary because gr.HTML has no server-side .click() event
+                        # of its own; a hidden same-purpose Button gives us one.
+                        crop_hidden_buttons = {}
+
+                        def _crop_grid_html(selected: str) -> str:
+                            cards = []
+                            for crop_name in CROPS:
+                                active = " rk-crop-card-active" if crop_name == selected else ""
+                                cards.append(
+                                    f"<div class='rk-crop-card{active}' onclick=\"document.getElementById('rk-crop-btn-{crop_name}').click()\">"
+                                    f"{CROP_SVG_ICONS[crop_name]}<span>{crop_name}</span></div>"
+                                )
+                            return f"<div class='rk-crop-grid'>{''.join(cards)}</div>"
+
+                        crop_grid_display = gr.HTML(_crop_grid_html("Maize"))
+
+                        with gr.Row(visible=False):
+                            for crop_name in CROPS:
+                                crop_hidden_buttons[crop_name] = gr.Button(
+                                    crop_name, elem_id=f"rk-crop-btn-{crop_name}"
+                                )
+
+                        # Hidden dropdown remains the single source of truth for
+                        # crop selection — every existing event binding below
+                        # (diagnose, switch_lang, etc.) reads this value unchanged.
+                        # The icon cards above just write into it on click.
+                        crop_dropdown = gr.Dropdown(
+                            choices=CROPS, value="Maize", label=TEXTS["en"]["select_crop"], visible=False
+                        )
                         question_type_radio = gr.Radio(
                             choices=QUESTION_TYPES, value="Identification", label=TEXTS["en"]["question_type"]
                         )
@@ -823,6 +968,16 @@ with gr.Blocks(title="RK AgriDig", theme=THEME, css=CUSTOM_CSS) as demo:
                             placeholder=TEXTS["en"]["symptom_ph"],
                             lines=5, max_lines=8,
                         )
+                        # Optional leaf photo — analyzed by classical CV heuristics
+                        # (src/image_symptom_extractor.py), NOT by Phi-3-mini-4k
+                        # itself, since that model has no vision tower. The photo's
+                        # extracted symptom signals get appended to whatever text
+                        # the farmer typed, and the existing text-only inference
+                        # pipeline handles the combined string unchanged.
+                        image_input = gr.Image(
+                            label=TEXTS["en"]["image_lbl"], type="numpy", sources=["upload", "webcam"], height=180,
+                        )
+                        image_signals_display = gr.HTML(value="", visible=False)
                         with gr.Row():
                             submit_btn = gr.Button(TEXTS["en"]["btn_submit"], elem_classes="rk-primary-btn")
                             clear_btn = gr.Button(TEXTS["en"]["btn_clear"], elem_classes="rk-secondary-btn")
@@ -833,6 +988,10 @@ with gr.Blocks(title="RK AgriDig", theme=THEME, css=CUSTOM_CSS) as demo:
                             f'<span class="rk-badge">{TEXTS["en"]["local_model"]}</span></div>'
                         )
                         response_output = gr.HTML(value=empty_result_html(TEXTS["en"]))
+                        with gr.Row():
+                            voice_btn = gr.Button(TEXTS["en"]["btn_voice"], elem_classes="rk-secondary-btn", size="sm")
+                        voice_status_html = gr.HTML(value="", visible=False)
+                        voice_audio_output = gr.Audio(label="", type="filepath", visible=False, autoplay=True)
 
             # ---- Treatments view ----
             with gr.Column(visible=False) as page_treatments:
@@ -979,10 +1138,25 @@ with gr.Blocks(title="RK AgriDig", theme=THEME, css=CUSTOM_CSS) as demo:
     btn_guide_pepper.click(fn=make_guide_handler("pepper"), inputs=[lang_state], outputs=[guide_display])
     btn_guide_tomato.click(fn=make_guide_handler("tomato"), inputs=[lang_state], outputs=[guide_display])
 
+    # --- Crop icon picker: hidden button click -> updates the real
+    # crop_dropdown value (source of truth, unchanged for every other
+    # handler in this file) and re-renders the icon grid's active state. ---
+    def make_crop_icon_handler(selected_crop: str):
+        def _handler():
+            return selected_crop, _crop_grid_html(selected_crop)
+        return _handler
+
+    for crop_name in CROPS:
+        crop_hidden_buttons[crop_name].click(
+            fn=make_crop_icon_handler(crop_name),
+            inputs=[],
+            outputs=[crop_dropdown, crop_grid_display],
+        )
+
     # --- Diagnosis submit chain (Enter key + button both wired) ---
-    def _submit_chain(question, crop, qtype, history, scan_times, last_req, lang, cooldown, save_hist):
+    def _submit_chain(question, crop, qtype, history, scan_times, last_req, lang, cooldown, save_hist, leaf_image):
         resp, new_hist, new_scan_times, new_last_req = diagnose(
-            question, crop, qtype, history, scan_times, last_req, lang, cooldown, save_hist
+            question, crop, qtype, history, scan_times, last_req, lang, cooldown, save_hist, leaf_image
         )
         return resp, new_hist, new_scan_times, new_last_req
 
@@ -992,7 +1166,7 @@ with gr.Blocks(title="RK AgriDig", theme=THEME, css=CUSTOM_CSS) as demo:
     ).then(
         fn=_submit_chain,
         inputs=[question_input, crop_dropdown, question_type_radio, history_state, scan_times_state,
-                last_request_state, lang_state, cooldown_state, save_history_state],
+                last_request_state, lang_state, cooldown_state, save_history_state, image_input],
         outputs=[response_output, history_state, scan_times_state, last_request_state],
     ).then(
         fn=lambda lang: gr.update(interactive=True, value=TEXTS[lang]["btn_submit"]),
@@ -1005,7 +1179,7 @@ with gr.Blocks(title="RK AgriDig", theme=THEME, css=CUSTOM_CSS) as demo:
     ).then(
         fn=_submit_chain,
         inputs=[question_input, crop_dropdown, question_type_radio, history_state, scan_times_state,
-                last_request_state, lang_state, cooldown_state, save_history_state],
+                last_request_state, lang_state, cooldown_state, save_history_state, image_input],
         outputs=[response_output, history_state, scan_times_state, last_request_state],
     ).then(
         fn=lambda lang: gr.update(interactive=True, value=TEXTS[lang]["btn_submit"]),
@@ -1013,7 +1187,35 @@ with gr.Blocks(title="RK AgriDig", theme=THEME, css=CUSTOM_CSS) as demo:
     )
 
     clear_btn.click(
-        fn=clear_all, inputs=[lang_state], outputs=[question_input, response_output],
+        fn=clear_all, inputs=[lang_state], outputs=[question_input, response_output, image_input],
+    )
+
+    # --- Voice playback: reads the current diagnosis aloud (English only).
+    # Twi is intentionally unsupported — see src/voice_output.py docstring
+    # for why an honest refusal beats a mispronounced attempt. ---
+    def _voice_handler(response_html: str, lang: str):
+        t = TEXTS[lang]
+        result = speak_diagnosis(response_html, lang)
+        if result.success:
+            return (
+                gr.update(value=result.audio_path, visible=True),
+                gr.update(value="", visible=False),
+            )
+        if result.reason == "unsupported_language":
+            msg = t.get("voice_unsupported_tw", "Voice narration isn't available in this language yet.")
+        elif result.reason == "empty_text":
+            msg = ""  # nothing to read yet — no diagnosis has been generated
+        else:
+            msg = "Voice narration couldn't be generated right now."
+        return (
+            gr.update(value=None, visible=False),
+            gr.update(value=f"<div class='rk-muted' style='font-size:0.85em; margin-top:4px;'>{msg}</div>" if msg else "", visible=bool(msg)),
+        )
+
+    voice_btn.click(
+        fn=_voice_handler,
+        inputs=[response_output, lang_state],
+        outputs=[voice_audio_output, voice_status_html],
     )
 
     # --- Settings: Save scan history On/Off toggle ---
@@ -1130,4 +1332,4 @@ if __name__ == "__main__":
             "   The UI will still launch, but diagnosis requests will fail until "
             "you run `ollama serve`."
         )
-    demo.launch(server_name="0.0.0.0", server_port=7860, show_error=True)
+    demo.launch(server_name="0.0.0.0", server_port=7860, show_error=True, theme=THEME, css=CUSTOM_CSS)
