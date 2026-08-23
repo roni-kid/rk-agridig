@@ -10,6 +10,23 @@ Public interface:
     client.health_check() -> bool
     client.load_model("phi3agridig") -> bool
     client.infer(question, crop, question_type) -> InferenceResult
+
+Changes from initial version:
+  - Added thermal rate-limiter: enforces a minimum gap between inference
+    calls to prevent sustained CPU temperatures exceeding 85°C (the ADTC
+    disqualification threshold). Real profiling showed sustained 96–100°C
+    during back-to-back inference — this is a hardware constraint on the
+    Ryzen AI 7 350 chassis, not something fixable in software. The limiter
+    doesn't solve the thermal issue for the profiler (which hammers the
+    model continuously by design) but protects real farmer-usage sessions.
+  - Fixed model name default: "phi3agridig" (no hyphen), matching the
+    actual `ollama create phi3agridig -f Modelfile` output confirmed during
+    Phase 1. The previous default "phi3-agridig" would silently fail
+    load_model() in production.
+  - OllamaTimeoutError is now actually raised on timeout (was previously
+    defined but never used — the timeout path only set last_error as string).
+
+Team: Aaron Baidoo (RoniKid) & Firdaus Kudus (github.com/KudusFirdaus)
 """
 
 from __future__ import annotations
@@ -95,6 +112,20 @@ class OllamaTimeoutError(RuntimeError):
     """Raised when inference exceeds the configured timeout."""
 
 
+class ThermalCooldownError(RuntimeError):
+    """
+    Raised when infer() is called before the minimum post-inference
+    cooldown has elapsed. The caller (UI) should surface this to the
+    farmer as "please wait N seconds" rather than queuing another call.
+
+    This is a deliberate hardware-protection measure: real profiling of
+    this project's Ryzen AI 7 350 showed sustained 96–100°C during
+    back-to-back inference, well above ADTC's 85°C disqualification
+    threshold and the chip's own Tjmax. The cooldown enforces a gap
+    between requests so the chassis can dissipate heat between calls.
+    """
+
+
 # ---------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------
@@ -103,17 +134,28 @@ class OllamaClient:
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
-        model_name: str = "phi3-agridig",   # must match `ollama create <name> -f Modelfile`
-        timeout_seconds: int = 150,          # headroom: ~32s cold tg + model load + Docker overhead
+        model_name: str = "phi3agridig",     # matches `ollama create phi3agridig -f Modelfile`
+        timeout_seconds: int = 150,           # headroom: ~32s cold tg + model load + retry buffer
         max_retries: int = 3,
         retry_backoff_seconds: float = 2.0,
+        thermal_cooldown_seconds: float = 45.0,
+        # Minimum gap between inference calls. Rationale:
+        # At 19 TPS and num_predict=300 the model takes ~16s to generate.
+        # The chip needs ~30–45s to drop from ~100°C back to idle (~55°C)
+        # based on the Phase 1/3 thermal profiling data. 45s is conservative
+        # enough to give real headroom without making the UI feel broken for
+        # typical farmer queries (which arrive at human typing pace anyway).
+        # Set to 0 to disable during the profiler run or automated eval.
     ):
         self.base_url = base_url.rstrip("/")
         self.model_name = model_name
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
         self.retry_backoff_seconds = retry_backoff_seconds
+        self.thermal_cooldown_seconds = thermal_cooldown_seconds
+
         self._model_loaded = False
+        self._last_inference_end: float = 0.0  # epoch time of last completed infer()
 
     # -- Health / lifecycle -------------------------------------------------
 
@@ -162,6 +204,39 @@ class OllamaClient:
             logger.error(f"load_model: error listing models: {e}")
             return False
 
+    # -- Thermal rate-limiter -----------------------------------------------
+
+    def thermal_cooldown_remaining(self) -> float:
+        """
+        Returns the number of seconds remaining before the next inference
+        call is permitted, or 0.0 if ready to go.
+
+        The UI should poll this before showing the submit button as active,
+        rather than letting the farmer click and then get a ThermalCooldownError.
+        """
+        if self._last_inference_end == 0.0:
+            return 0.0  # never run before, no cooldown needed
+        if self.thermal_cooldown_seconds == 0:
+            return 0.0  # cooldown disabled (e.g. for automated eval runs)
+        elapsed = time.time() - self._last_inference_end
+        remaining = self.thermal_cooldown_seconds - elapsed
+        return max(0.0, remaining)
+
+    def _check_thermal_cooldown(self) -> None:
+        """
+        Raises ThermalCooldownError if the minimum post-inference gap has
+        not yet elapsed. Called at the start of infer() before any work.
+        """
+        remaining = self.thermal_cooldown_remaining()
+        if remaining > 0:
+            msg = (
+                f"Thermal cooldown active: {remaining:.0f}s remaining before next "
+                f"inference is permitted. This protects the CPU from sustained "
+                f"temperatures above 85°C (ADTC disqualification threshold)."
+            )
+            logger.warning(f"infer: blocked by thermal cooldown — {remaining:.0f}s remaining")
+            raise ThermalCooldownError(msg)
+
     # -- Inference ------------------------------------------------------------
 
     def infer(
@@ -173,6 +248,10 @@ class OllamaClient:
         """
         Runs inference against the Ollama server with retry logic.
 
+        Raises ThermalCooldownError if called too soon after the previous
+        inference — callers should use thermal_cooldown_remaining() to gate
+        the submit button rather than catching this as a routine error.
+
         Args:
             question: farmer's free-text description of the problem.
             crop: one of "Maize", "Pepper", "Tomato".
@@ -180,19 +259,24 @@ class OllamaClient:
 
         Returns:
             InferenceResult with parsed structured fields, or success=False
-            with `.error` set if inference failed after all retries.
+            with .error set if inference failed after all retries.
         """
+        # Thermal gate: enforce minimum gap between calls.
+        # This raises immediately — does not silently queue or delay,
+        # since a silent delay would block the UI without farmer feedback.
+        self._check_thermal_cooldown()
+
         user_prompt = self._build_user_prompt(question, crop, question_type)
 
         # Token budget by question type.
         # Identification needs all 4 sections → more tokens.
         # Treatment / Prevention are single-section answers → cap lower.
-        # Tighter caps = faster responses + less thermal load on sustained use.
-        # At ~17 TPS: 300 tok ≈ 18s, 200 tok ≈ 12s, 150 tok ≈ 9s.
+        # Tighter caps = faster responses + less sustained thermal load.
+        # At ~19 TPS (measured): 300 tok ≈ 16s, 200 tok ≈ 11s, 150 tok ≈ 8s.
         num_predict_by_type = {
             "Identification": 300,
-            "Treatment": 200,
-            "Prevention": 150,
+            "Treatment":      200,
+            "Prevention":     150,
         }
         num_predict = num_predict_by_type.get(question_type, 300)
 
@@ -214,7 +298,7 @@ class OllamaClient:
             try:
                 logger.info(
                     f"infer: attempt {attempt}/{self.max_retries} "
-                    f"(crop={crop}, type={question_type})"
+                    f"(crop={crop}, type={question_type}, num_predict={num_predict})"
                 )
                 resp = requests.post(
                     f"{self.base_url}/api/generate",
@@ -233,14 +317,27 @@ class OllamaClient:
                 )
                 logger.debug(f"infer: raw_text={raw_text!r}")
 
+                # Record inference completion time for thermal cooldown.
+                # Set AFTER a successful response so the cooldown clock
+                # starts from when the chip actually finished working,
+                # not from when we sent the request.
+                self._last_inference_end = time.time()
+
                 parsed = self._parse_structured_response(raw_text)
                 parsed.latency_seconds = elapsed
                 parsed.success = True
                 return parsed
 
             except requests.exceptions.Timeout:
+                elapsed = time.time() - start
                 last_error = f"Inference timed out after {self.timeout_seconds}s"
-                logger.warning(f"infer: attempt {attempt} timed out")
+                logger.warning(
+                    f"infer: attempt {attempt} timed out after {elapsed:.1f}s"
+                )
+                # Still record the end time — the chip was under load even
+                # though we didn't get a result, so cooldown still applies.
+                self._last_inference_end = time.time()
+                raise OllamaTimeoutError(last_error)
 
             except requests.exceptions.ConnectionError as e:
                 last_error = f"Cannot reach Ollama server at {self.base_url}: {e}"
@@ -259,6 +356,8 @@ class OllamaClient:
                 logger.info(f"infer: retrying in {sleep_time:.1f}s")
                 time.sleep(sleep_time)
 
+        # All retries exhausted — still record end time for cooldown.
+        self._last_inference_end = time.time()
         logger.error(f"infer: all {self.max_retries} attempts failed: {last_error}")
         return InferenceResult(
             success=False,
@@ -291,9 +390,9 @@ class OllamaClient:
         }
 
         patterns = {
-            "disease": r"Disease Name:\s*(.+?)(?=\n\s*Symptoms:|\Z)",
-            "symptoms": r"Symptoms:\s*(.+?)(?=\n\s*Treatment:|\Z)",
-            "treatment": r"Treatment:\s*(.+?)(?=\n\s*Prevention:|\Z)",
+            "disease":    r"Disease Name:\s*(.+?)(?=\n\s*Symptoms:|\Z)",
+            "symptoms":   r"Symptoms:\s*(.+?)(?=\n\s*Treatment:|\Z)",
+            "treatment":  r"Treatment:\s*(.+?)(?=\n\s*Prevention:|\Z)",
             "prevention": r"Prevention:\s*(.+?)(?=\Z)",
         }
 
@@ -361,5 +460,8 @@ if __name__ == "__main__":
         print(f"Symptoms:   {result.symptoms}")
         print(f"Treatment:  {result.treatment}")
         print(f"Prevention: {result.prevention}")
+
+        remaining = client.thermal_cooldown_remaining()
+        print(f"\nThermal cooldown: {remaining:.0f}s remaining before next call permitted")
     else:
         print(f"❌ Inference failed: {result.error}")

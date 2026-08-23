@@ -1,46 +1,46 @@
 {
-  "timestamp_utc": "2026-08-16T20:07:22.324995+00:00",
+  "timestamp_utc": "2026-08-23T15:38:35.714746+00:00",
   "model_path": "/mnt/c/Users/rocks/Documents/Africa Deep Tech Challenge/rk-agridig/models/phi3_mini_4k_instruct.gguf",
   "model_size_gb": 2.229,
   "threads": 8,
   "cpu_info": "AMD Ryzen AI 7 350 w/ Radeon 860M",
   "build_commit": "4df29be4f",
-  "prompt_processing_per_token_ms": 64.3576,
-  "generation_per_token_ms": 56.5149,
-  "peak_ram_usage_gb": 3.652,
-  "throughput_tokens_per_second": 17.694,
+  "prompt_processing_per_token_ms": 64.4187,
+  "generation_per_token_ms": 52.1544,
+  "peak_ram_usage_gb": 3.653,
+  "throughput_tokens_per_second": 19.174,
   "prompt_processing_by_batch_size": {
     "1": {
-      "tokens_per_second": 15.538,
-      "per_token_ms": 64.3576,
-      "stddev_ts": 0.808
+      "tokens_per_second": 15.523,
+      "per_token_ms": 64.4187,
+      "stddev_ts": 1.386
     },
     "8": {
-      "tokens_per_second": 53.858,
-      "per_token_ms": 18.5674,
-      "stddev_ts": 7.713
+      "tokens_per_second": 51.683,
+      "per_token_ms": 19.3489,
+      "stddev_ts": 7.912
     },
     "32": {
-      "tokens_per_second": 63.812,
-      "per_token_ms": 15.671,
-      "stddev_ts": 10.805
+      "tokens_per_second": 55.734,
+      "per_token_ms": 17.9424,
+      "stddev_ts": 3.387
     }
   },
   "text_generation_by_batch_size": {
     "1": {
-      "tokens_per_second": 17.694,
-      "per_token_ms": 56.5149,
-      "stddev_ts": 2.995
+      "tokens_per_second": 19.174,
+      "per_token_ms": 52.1544,
+      "stddev_ts": 3.728
     },
     "8": {
-      "tokens_per_second": 23.688,
-      "per_token_ms": 42.2161,
-      "stddev_ts": 0.491
+      "tokens_per_second": 21.182,
+      "per_token_ms": 47.2099,
+      "stddev_ts": 2.777
     },
     "32": {
-      "tokens_per_second": 21.283,
-      "per_token_ms": 46.9853,
-      "stddev_ts": 4.605
+      "tokens_per_second": 13.396,
+      "per_token_ms": 74.6502,
+      "stddev_ts": 2.456
     }
   },
   "adtc_targets": {

@@ -859,7 +859,8 @@ def clear_all(lang: str):
 # ---------------------------------------------------------------------------
 # UI Layout
 # ---------------------------------------------------------------------------
-with gr.Blocks(title="RK AgriDig") as demo:
+# FIXED
+with gr.Blocks(title="RK AgriDig", theme=THEME, css=CUSTOM_CSS) as demo:
     # Per-session state — NOT module globals, so one visitor's scans never
     # leak into another visitor's browser tab (fapp.py used module-level
     # lists for this, which is a real bug under concurrent users).
@@ -1332,4 +1333,4 @@ if __name__ == "__main__":
             "   The UI will still launch, but diagnosis requests will fail until "
             "you run `ollama serve`."
         )
-    demo.launch(server_name="0.0.0.0", server_port=7860, show_error=True, theme=THEME, css=CUSTOM_CSS)
+    demo.launch(server_name="0.0.0.0", server_port=7860, show_error=True)

@@ -38,6 +38,43 @@ sentence-transformers>=3.0,<4.0
 # of several other packages in this list.
 scikit-learn>=1.4,<2.0
 
+# --- Phase 3 additions (image analysis + voice output) ---
+# Added when src/image_symptom_extractor.py and src/voice_output.py were
+# introduced. The original requirements.txt predated these modules.
+
+# opencv-python: classical CV heuristics for leaf photo analysis
+# (color segmentation, lesion detection). Chosen over a vision-capable LLM
+# because Phi-3-mini-4k-instruct has no vision tower, and any model that
+# does would blow past the 7GB RAM ceiling. This is deterministic array math,
+# not a neural forward pass -- negligible RAM and thermal impact.
+opencv-python>=4.9,<5.0
+
+# numpy: explicit pin even though sentence-transformers already pulls it in
+# transitively. app.py and image_symptom_extractor.py both use np directly,
+# so the dependency should be declared, not assumed.
+numpy>=1.26,<3.0
+
+# pyttsx3: offline text-to-speech wrapping the OS's native engine (espeak-ng
+# on WSL2/Linux). Near-zero RAM/CPU cost compared to neural TTS, which would
+# compete with Phi-3-mini for the thermal and memory budget.
+# NOTE: also requires the espeak-ng system package:
+#   sudo apt-get install espeak-ng
+pyttsx3>=2.90
+
+# --- Dataset + model download (scripts/, models/) ---
+# huggingface-hub: used by models/download_model.py to pull the Phi-3-mini
+# Q4_K_M GGUF from HuggingFace. Not a runtime dependency of the app itself.
+huggingface-hub>=0.23,<1.0
+
+# datasets: used by scripts/create_eval_dataset.py to load GhanaAgricVQA
+# train/test splits. Also not a runtime dep -- only needed for eval prep.
+datasets>=2.20,<4.0
+
+# --- Benchmarking / thermal monitoring ---
+# psutil: CPU temperature + peak RAM measurement in benchmarks/thermal_monitor.py.
+# Also not a runtime dep -- only needed during profiling runs.
+psutil>=5.9,<7.0
+
 # --- Note on what's intentionally NOT listed here ---
 # llama.cpp / llama-bench / Ollama itself: native binaries, not pip packages.
 # See docs/PROMPTING_STRATEGY.md and Phase 1 notes for build/install steps.

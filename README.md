@@ -4,7 +4,7 @@
 
 An on-device crop disease diagnostic and advisory system for smallholder farmers in Ghana and West Africa. Runs entirely offline on commodity 8GB laptops — no internet, no API costs, no cloud dependency.
 
-![RK AgriDig Banner](assets/banner.png)
+![RK AgriDig Banner](thumbail.png)
 
 ## 🌍 The Problem
 
@@ -204,6 +204,16 @@ This project is built for the **Africa Deep Tech Challenge 2026** — a hackatho
 - **Aug 25** — Gate 1: Proposal + prototype deadline
 - **Sept 22** — Semifinal submission deadline
 - **Oct 17** — Live defense & winners announced
+
+## Screenshots
+
+| UI Home | Sample Query | Model Response |
+|---------|-------------|----------------|
+| ![UI Home](outputs/demo_screenshots/01_ui_home.png) | ![Query](outputs/demo_screenshots/02_sample_query.png) | ![Twi Home](outputs/demo_screenshots/07_twi_home_ui.png) |
+
+| Benchmarks | Terminal Setup |
+|-----------|---------------|
+| ![Benchmarks](outputs/demo_screenshots/04_benchmarks.png) | ![Terminal](outputs/demo_screenshots/05_terminal.png) |
 
 ## 🤝 Contributing
 
