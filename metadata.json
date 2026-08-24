@@ -1,0 +1,71 @@
+{
+  "team_name": "RK",
+  "members": [
+    {
+      "name": "Aaron Baidoo",
+      "handle": "RoniKid",
+      "institution": "Ghana Communication Technology University (GCTU)",
+      "role": "Lead Developer"
+    },
+    {
+      "name": "Firdaus Kudus",
+      "institution": "Ghana Communication Technology University (GCTU)",
+      "role": "Collaborator"
+    }
+  ],
+  "project_name": "RK AgriDig",
+  "description": "Offline-first crop disease diagnostic AI for Ghanaian smallholder farmers. Runs entirely on-device — no internet, no cloud, no API costs.",
+  "model": {
+    "name": "phi3agridig",
+    "base": "microsoft/Phi-3-mini-4k-instruct",
+    "quantization": "Q4_K_M",
+    "format": "GGUF",
+    "size_gb": 2.23,
+    "inference_engine": "Ollama + llama.cpp",
+    "context_length": 4096
+  },
+  "hardware_target": {
+    "ram_gb": 8,
+    "gpu": "none (CPU-only inference)",
+    "os": "Ubuntu 22.04 LTS"
+  },
+  "dataset": {
+    "name": "GhanaAgricVQA",
+    "source": "https://huggingface.co/datasets/toufiqmusah/GhanaAgricVQA-Dataset",
+    "crops": ["Maize", "Pepper", "Tomato"],
+    "disease_classes": 26,
+    "total_samples": 2361,
+    "train": 2010,
+    "test": 351
+  },
+  "performance": {
+    "throughput_tps": 17.69,
+    "peak_ram_gb": 3.65,
+    "thread_count": 8
+  },
+  "test_prompts": [
+    {
+      "id": "tp1",
+      "crop": "Maize",
+      "question_type": "identification",
+      "prompt": "My maize leaves have brown spots with yellow halos and the spots are getting bigger. What disease is this and how serious is it?"
+    },
+    {
+      "id": "tp2",
+      "crop": "Pepper",
+      "question_type": "treatment",
+      "prompt": "My pepper plants have dark brown lesions on the fruit and the leaves are dropping. What should I do to treat this?"
+    },
+    {
+      "id": "tp3",
+      "crop": "Tomato",
+      "question_type": "prevention",
+      "prompt": "Last season my tomatoes had a disease where the leaves turned yellow and brown from the bottom up. How do I prevent this from happening again?"
+    }
+  ],
+  "github": "https://github.com/roni-kid/rk-agridig",
+  "license": "CC-BY 4.0",
+  "competition": "Africa Deep Tech Challenge (ADTC) 2026",
+  "gate": "Gate 1",
+  "submission_date": "2026-08-25"
+}
